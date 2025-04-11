@@ -1,0 +1,568 @@
+API Index
+Account Management
+Fetch account information
+Add new mining account
+List all mining accounts
+Modify wallet address
+Create read-only page
+Delete read-only page
+Manual withdrawal
+Pause payment
+Resume payment
+Change payout threshold
+Change payout threshold value
+Assets module
+Fetch current user's asset details
+Bill list
+Settlement mode
+Hashrate Module
+Hashrate information
+Hashrate information of multiple account
+Hashrate historical data (time serial data)
+Worker list
+Hashrate historical data (time serial data) of worker
+Hashrate Distribution
+Hashrate distribution information
+List of all orders of hashrate distribution
+List of all settlements of hashrate distribution
+Distribute hashrate to an f2pool account
+Terminate hashrate distribution order
+Revenue Distribution
+Get revenue distribution information
+Distribute revenue to an f2pool account
+Terminate revenue distribution record
+Pool Information
+Blocks list
+Blocks list
+mining reward details of user pplns
+f2pool API supports HTTPS requests to access the mining pool service, which includes support for subaccount management, wallet management, payment information, hashrate, workers and other query functions.
+
+How to get the API token
+You can activate the API service and get the API token through the website, or contact f2pool customer service agents.
+
+API authentication
+F2P-API-secret
+Fill the header with API token on the right field to pass verification. Note that we only accept POST requests with application/json
+
+For example
+
+curl --request POST {url}
+--header 'Content-Type: application/json'
+--header 'F2P-API-SECRET: {token}'
+--data-raw '{
+"currency": "bitcoin",
+"user_name": "xxx",
+...
+}'
+{url} is https://api.f2pool.com/v2/{request_name} You will get the following uniform formatted data if there is a error
+
+{
+"code": {ERR_CODE},
+"msg": "error_type: description"
+}
+The available values of the 'currency' field in the API:
+
+bitcoin,aleo,alephium,bells-mm,bitcion,bitcoin-cash,conflux,dash,elacoin,ethereum-classic,ethw,fractal-bitcoin,fractal-bitcoin-mm,hathor,ironfish,junkcoin,kadena,kaspa,litecoin,luckycoin,nervos,nexa,nmccoin,pepecoin,zcash,zen,junkcoin,dingocoin,craftcoin,elastos,quai,shibacoin,canxium
+The hashrate module currently supports only:
+
+bitcoin,bitcoin-cash,litecoin
+The hashrate distribution module currently supports only:
+
+bitcoin,litecoin
+Account Management
+Public Messages:
+
+ReadOnlyPage
+Read-only page data
+
+Name	Type	Mark	description
+key	string		/mining-user-{currency}/{key} is the URI of the read-only page
+permissions	string		Different permissions should be separated by comma
+* 1 means it has permission to view the mining hashrate and worker list
+* 2 means it has permission to view the revenue data, including the payment information
+* 3 means it has permission to view the revenue data without payment information
+page_name	string		Description of the read-only page
+Wallet
+Wallet data
+
+Name	Type	Mark	description
+currency	string		Currency type
+address	string		Wallet address
+threshold	string		Payout threshold
+ExtraEntry
+Name	Type	Mark	description
+key	string		
+value	string		
+MiningUserInfo
+Account data
+
+Name	Type	Mark	description
+mining_user_name	string		Account name
+pages	ReadOnlyPage	repeated	Read-only page data
+wallets	Wallet	repeated	Wallet address information of all currencies
+description	string		Description of the account
+WalletParams
+Name	Type	Mark	description
+mining_user_name	string		Account name
+wallets	Wallet	repeated	Wallet address configuration list
+ResultsEntry
+Name	Type	Mark	description
+key	string		
+value	string		
+WalletResp
+Name	Type	Mark	description
+currency	string		Currency type
+address	string		Wallet address
+result	string		true/false
+msg	string		Error message
+MiningUserWalletResp
+Name	Type	Mark	description
+mining_user_name	string		Account name
+wallet_result	WalletResp	repeated	
+ResultsEntry
+Name	Type	Mark	description
+key	string		
+value	MiningUserWalletResp		
+Fetch account information
+POST /v2/mining_user/get
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+Response Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+pages	ReadOnlyPage	repeated	Read-only page data
+wallets	Wallet	repeated	Wallet address information of all currencies
+description	string		Description of the account
+Add new mining account
+POST /v2/mining_user/add
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Add new mining account, account name should contain 2-15 lower case letters or numbers, beginning with a letter.
+Response Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+pages	ReadOnlyPage	repeated	Read-only page data
+wallets	Wallet	repeated	Wallet address information of all currencies
+description	string		Description of the account
+List all mining accounts
+POST /v2/mining_user/list
+Response Parameter
+Name	Type	Mark	description
+mining_user_list	MiningUserInfo	repeated	Get the list of all mining accounts
+Modify wallet address
+POST /v2/mining_user/wallet/update
+Request Parameter
+Name	Type	Mark	description
+params	WalletParams	repeated	
+Response Parameter
+Name	Type	Mark	description
+results	ResultsEntry	repeated	
+Create read-only page
+POST /v2/mining_user/read_only_page/add
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+page_name	string		Description of the read-only page
+permissions	string		Permission settings, the same as ReadOnlyPage
+Response Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+page	ReadOnlyPage		Read-only page
+Delete read-only page
+POST /v2/mining_user/read_only_page/delete
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+key	string		The key in ReadOnlyPage
+Response Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+Manual withdrawal
+POST /v2/mining_user/balance/withdraw
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+currency	string		Currency type
+Response Parameter
+Name	Type	Mark	description
+paid_time	int64		Payment timestamp
+Pause payment
+POST /v2/mining_user/payment/pause
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+mining_user_names	string	repeated	Account list
+Response Parameter
+Name	Type	Mark	description
+results	ResultsEntry	repeated	result
+Resume payment
+POST /v2/mining_user/payment/resume
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+mining_user_names	string	repeated	Account list
+Response Parameter
+Name	Type	Mark	description
+results	ResultsEntry	repeated	result
+Change payout threshold
+POST /v2/mining_user/threshold/update
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+currency	string		Currency type
+threshold	string		Please use values as defined by the website
+Response Parameter
+Name	Type	Mark	description
+threshold	string		Payout threshold
+Change payout threshold value
+POST /v2/mining_user/threshold/update_value
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name
+currency	string		Currency type
+Response Parameter
+Name	Type	Mark	description
+threshold	string		Payout threshold
+Assets module
+Public Messages:
+
+BalanceInfo
+Mining revenue
+
+Name	Type	Mark	description
+balance	double		Balance (before 00:00 UTC)
+immature_balance	double		Balance (before 00:00 UTC)
+paid	double		Total payment
+total_income	double		Total mining revenues
+yesterday_income	double		Yesterday’s revenues
+estimated_today_income	double		The estimated mining revenue from 00:00 UTC to now
+MiningExtra
+Name	Type	Mark	description
+mining_date	int64		Date of mining
+settle_date	int64		Date of settlement
+pps	double		PPS revenues
+pps_fee_rate	float		The pool fee of the PPS part
+tx_fee	double		Reward from transaction fees
+tx_fee_rate	float		The pool fee of the reward from transaction fees
+hash_rate	double		The average hashrate on the day of mining
+PayoutExtra
+Name	Type	Mark	description
+value	double		Payout amount
+address	string		The wallet address or account name that receive the coins
+tx_id	string		On-chain transaction ID
+paid_time	int64		Payout timestamp
+wallet_type	string		The type of the wallet address (mainnet wallet address or third part wallet address)
+tip	double		Transaction fee
+TransactionItem
+Name	Type	Mark	description
+id	int64		
+type	string		
+changed_balance	double		If the changed_balance is greater than 0, it is the income, less than 0, it is the outcome
+created_at	int64		The payout timestamp
+mining_extra	MiningExtra		Income details
+payout_extra	PayoutExtra		Outcome details
+Fetch current user's asset details
+POST /v2/assets/balance
+Request Parameter
+Name	Type	Mark	description
+currency	string		
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+Response Parameter
+Name	Type	Mark	description
+balance_info	BalanceInfo		
+Bill list
+POST /v2/assets/transactions/list
+Request Parameter
+Name	Type	Mark	description
+currency	string		Required
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+type	string		Multiple types are separated by ,
+- all
+- revenue Mining revenue
+- reward Activity rewards or consumptions
+- dividend Income divided by other mining accounts
+- flash_exchange Exchange value
+- payout Outcome
+There are more detailed account types in the return value, please refer to the actual situation
+start_time	int64		Start timestamp
+end_time	int64		End timestamp, must be later than start timestamp
+Response Parameter
+Name	Type	Mark	description
+transactions	TransactionItem	repeated	
+Settlement mode
+POST /v2/assets/settle_mode/switch
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency Type
+mode	string		settle mode
+mining_user_name	string		user
+activated_at	int64		active time
+Response Parameter
+Name	Type	Mark	description
+mode	string		
+activated_at	int64		active time
+Hashrate Module
+Public Messages:
+
+HashRateInfo
+Name	Type	Mark	description
+name	string		Account name or worker name
+hash_rate	double		Current hashrate
+h1_hash_rate	double		The average hashrate of last 1 hour
+h24_hash_rate	double		The average hashrate of last 24 hours
+h1_stale_hash_rate	double		The average rejected hashrate of last 1 hour
+h24_stale_hash_rate	double		The average rejected hashrate of last 24 hours
+h24_delay_hash_rate	double		The average delayed hashrate of last 24 hours
+local_hash_rate	double		The current local hashrate or reported hashrate
+h24_local_hash_rate	double		The average local hashrate or reported hashrate of last 24 hours
+MiningHistoryItem
+Name	Type	Mark	description
+timestamp	int64		Timestamp
+hash_rate	double		Hashrate
+stale_hash_rate	double		Hashrate rejected
+delay_hash_rate	double		Hashrate delayed
+local_hash_rate	double		Local hashrate or reported hashrate
+normal_reward	double		Mining revenues
+delay_reward	double		Mining revenues of the delayed hashrate
+online_miners	uint32		Online miners
+UserMiningReq
+Name	Type	Mark	description
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+currency	string		Currency type
+WorkerMiningInfo
+Name	Type	Mark	description
+hash_rate_info	HashRateInfo		Hashrate information
+last_share_at	int64		The time of the last submitted share from the worker
+status	WorkerStatus		Current status
+host	string		The public IP address
+Hashrate information
+POST /v2/hash_rate/info
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+currency	string		Currency type
+Response Parameter
+Name	Type	Mark	description
+info	HashRateInfo		Hashrate information
+currency	string		Currency type
+Hashrate information of multiple account
+POST /v2/hash_rate/info_list
+Request Parameter
+Name	Type	Mark	description
+reqs	UserMiningReq	repeated	Request account name or wallet address list, the maximum amount is 100
+Response Parameter
+Name	Type	Mark	description
+info	HashRateInfo	repeated	
+Hashrate historical data (time serial data)
+POST /v2/hash_rate/history
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+currency	string		Currency type
+interval	int64		The seconds of interval, it should be divisible by 10 minutes
+duration	int64		The seconds of duration, it is up to 30 days
+Response Parameter
+Name	Type	Mark	description
+history	MiningHistoryItem	repeated	Historical data
+Worker list
+POST /v2/hash_rate/worker/list
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+currency	string		Currency type
+Response Parameter
+Name	Type	Mark	description
+workers	WorkerMiningInfo	repeated	Worker list
+Hashrate historical data (time serial data) of worker
+POST /v2/hash_rate/worker/history
+Request Parameter
+Name	Type	Mark	description
+mining_user_name	string		Account name (Only one of mining_user_name and address should be used)
+address	string		Wallet address
+currency	string		Currency type
+worker_name	string		Worker name
+interval	int64		The seconds of interval, it should be divisible by 10 minutes
+duration	int64		The seconds of duration, it is up to 3 days
+Response Parameter
+Name	Type	Mark	description
+history	MiningHistoryItem	repeated	
+Hashrate Distribution
+Public Messages:
+
+HashRateDistributionOrder
+Requires the order of hashrate distribution
+
+Name	Type	Mark	description
+id	int64		
+start_date	int64		Start timestamp
+end_date	int64		End timestamp, must be later than start timestamp
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+hash_rate	double		Hashrate
+terminate_at	int64		Return value if the order was ended early, otherwise 0
+HashRateDistributionSettlement
+Name	Type	Mark	description
+id	int64		
+order	HashRateDistributionOrder		Order
+hashes	double		Note that this is the number of hashes, not the hashrate
+income	double		Revenue
+timestamp	int64		Settlement timestamp of the hashrate distribution
+Hashrate distribution information
+POST /v2/hash_rate/distribution/info
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+start_date	int64		Start timestamp
+end_date	int64		End timestamp, must be later than start timestamp
+hash_rate	double		Hashrate
+Response Parameter
+Name	Type	Mark	description
+current_hash_rate	double		The total hashrate
+sold_hash_rate	double		The hashrate that has been distributed
+remaining_hash_rate	double		The remaining hashrate
+List of all orders of hashrate distribution
+POST /v2/hash_rate/distribution/orders
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+Response Parameter
+Name	Type	Mark	description
+orders	HashRateDistributionOrder	repeated	
+List of all settlements of hashrate distribution
+POST /v2/hash_rate/distribution/settlements
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+Response Parameter
+Name	Type	Mark	description
+settlements	HashRateDistributionSettlement	repeated	
+Distribute hashrate to an f2pool account
+POST /v2/hash_rate/distribute
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+start_date	int64		Start timestamp
+end_date	int64		End timestamp, must be later than start timestamp
+hash_rate	double		Hashrate
+Response Parameter
+Name	Type	Mark	description
+order	HashRateDistributionOrder		
+Terminate hashrate distribution order
+POST /v2/hash_rate/distribution/terminate
+Request Parameter
+Name	Type	Mark	description
+order_id	int64		
+Response Parameter
+Name	Type	Mark	description
+reason	string		
+Revenue Distribution
+Public Messages:
+
+RevenueDistribution
+Name	Type	Mark	description
+id	string		
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+description	string		
+proportion	double		proportion
+Get revenue distribution information
+POST /v2/revenue/distribution/info
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+Response Parameter
+Name	Type	Mark	description
+data	RevenueDistribution	repeated	list of distributed configs
+Distribute revenue to an f2pool account
+POST /v2/revenue/distribution/add
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+description	string		
+proportion	double		proportion
+Response Parameter
+Name	Type	Mark	description
+id	string		
+currency	string		Currency type
+distributor	string		The distributor account name
+recipient	string		The recipient account name
+description	string		
+proportion	double		proportion
+Terminate revenue distribution record
+POST  /v2/revenue/distribution/delete
+Request Parameter
+Name	Type	Mark	description
+id	int64		
+distributor	string		The distributor account name
+Response Parameter
+Name	Type	Mark	description
+reason	string		
+Pool Information
+Public Messages:
+
+LuckyEntry
+Name	Type	Mark	description
+key	string		
+value	float		
+Block
+Name	Type	Mark	description
+height	int64		
+block_hash	string		
+base_reward	double		
+total_reward	double		
+timestamp	int64		
+settle_timestamp	int64		
+Blocks list
+POST /v2/blocks/paging
+Request Parameter
+Name	Type	Mark	description
+page	int32		
+pagesize	int32		
+currency	string		Currency Type
+Response Parameter
+Name	Type	Mark	description
+lucky	LuckyEntry	repeated	
+blocklist	Block	repeated	
+sum	int32		
+Blocks list
+POST /v2/blocks/date_range
+Request Parameter
+Name	Type	Mark	description
+start_time	int64		
+end_time	int64		
+currency	string		Currency Type
+Response Parameter
+Name	Type	Mark	description
+lucky	LuckyEntry	repeated	
+blocklist	Block	repeated	
+sum	int32		
+mining reward details of user pplns
+POST /v2/blocks/user
+Request Parameter
+Name	Type	Mark	description
+currency	string		Currency Type
+mining_user_name	string		User
+mining_reward	int64		Reward
+start_time	int64		Start time
+end_time	int64		End time
+Response Parameter
+Name	Type	Mark	description
+blocklist	Block	repeated	

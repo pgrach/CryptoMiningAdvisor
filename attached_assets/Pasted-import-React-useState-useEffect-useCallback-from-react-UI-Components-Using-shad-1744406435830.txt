@@ -1,0 +1,426 @@
+import React, { useState, useEffect, useCallback } from 'react';
+
+// --- UI Components (Using shadcn/ui conventions) ---
+
+// Input Component
+const Input = React.forwardRef(({ className, type, ...props }, ref) => (
+  <input
+    type={type}
+    className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    ref={ref}
+    {...props}
+  />
+));
+Input.displayName = 'Input';
+
+// Button Component
+const Button = React.forwardRef(({ className, variant = 'default', size = 'default', ...props }, ref) => {
+  const variants = {
+    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+    outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+    ghost: 'hover:bg-accent hover:text-accent-foreground',
+    link: 'text-primary underline-offset-4 hover:underline',
+  };
+  const sizes = {
+    default: 'h-10 px-4 py-2',
+    sm: 'h-9 rounded-md px-3',
+    lg: 'h-11 rounded-md px-8',
+    icon: 'h-10 w-10',
+  };
+  return (
+    <button
+      className={`inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      ref={ref}
+      {...props}
+    />
+  );
+});
+Button.displayName = 'Button';
+
+// Card Component Structure (Simplified)
+const Card = ({ className, children, ...props }) => (
+  <div className={`rounded-lg border bg-card text-card-foreground shadow-sm ${className}`} {...props}>
+    {children}
+  </div>
+);
+const CardHeader = ({ className, children, ...props }) => (
+  <div className={`flex flex-col space-y-1.5 p-6 ${className}`} {...props}>
+    {children}
+  </div>
+);
+const CardTitle = ({ className, children, ...props }) => (
+  <h3 className={`text-lg font-semibold leading-none tracking-tight ${className}`} {...props}>
+    {children}
+  </h3>
+);
+const CardDescription = ({ className, children, ...props }) => (
+  <p className={`text-sm text-muted-foreground ${className}`} {...props}>
+    {children}
+  </p>
+);
+const CardContent = ({ className, children, ...props }) => (
+  <div className={`p-6 pt-0 ${className}`} {...props}>
+    {children}
+  </div>
+);
+const CardFooter = ({ className, children, ...props }) => (
+  <div className={`flex items-center p-6 pt-0 ${className}`} {...props}>
+    {children}
+  </div>
+);
+
+// --- Main Application ---
+
+function App() {
+  // --- State Variables ---
+  const [apiKey, setApiKey] = useState(''); // F2Pool API Key (Conceptual)
+  const [miningUserName, setMiningUserName] = useState(''); // F2Pool Mining User Name
+  const [selectedCurrency, setSelectedCurrency] = useState('bitcoin'); // Default currency
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Simulated Data States
+  const [miningData, setMiningData] = useState(null); // To store fetched mining data
+  const [marketData, setMarketData] = useState(null); // To store fetched market data
+  const [advice, setAdvice] = useState(null); // To store the AI's advice
+
+  // --- Available Currencies (from API doc) ---
+  const currencies = [
+    'bitcoin', 'aleo', 'alephium', 'bells-mm', 'bitcion', 'bitcoin-cash',
+    'conflux', 'dash', 'elacoin', 'ethereum-classic', 'ethw', 'fractal-bitcoin',
+    'fractal-bitcoin-mm', 'hathor', 'ironfish', 'junkcoin', 'kadena', 'kaspa',
+    'litecoin', 'luckycoin', 'nervos', 'nexa', 'nmccoin', 'pepecoin', 'zcash',
+    'zen', 'dingocoin', 'craftcoin', 'elastos', 'quai', 'shibacoin', 'canxium'
+  ];
+
+  // --- Simulated Data Fetching Functions ---
+
+  // Simulate fetching mining data from F2Pool API
+  const fetchMiningData = useCallback(async () => {
+    console.log(`Simulating fetchMiningData for user: ${miningUserName}, currency: ${selectedCurrency}`);
+    setError(null); // Clear previous errors
+
+    // **SECURITY WARNING:** In a real app, NEVER use API keys directly in the frontend.
+    // This requires a secure backend implementation.
+    if (!apiKey || !miningUserName) {
+      setError("API Key and Mining User Name are required (conceptually).");
+      return null;
+    }
+
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // --- Simulate different API endpoints based on potential needs ---
+
+    // Example 1: Fetch Balance (using /v2/assets/balance structure)
+    const simulatedBalance = {
+      balance_info: {
+        balance: Math.random() * 1, // e.g., 0.0 to 1.0 BTC
+        immature_balance: Math.random() * 0.1,
+        paid: Math.random() * 10,
+        total_income: Math.random() * 11,
+        yesterday_income: Math.random() * 0.05,
+        estimated_today_income: Math.random() * 0.02,
+      }
+    };
+
+    // Example 2: Fetch Hashrate (using /v2/hash_rate/info structure)
+    // Note: Hashrate module only supports bitcoin, bitcoin-cash, litecoin per docs
+    let simulatedHashrate = null;
+    if (['bitcoin', 'bitcoin-cash', 'litecoin'].includes(selectedCurrency)) {
+        simulatedHashrate = {
+            info: {
+                name: miningUserName,
+                hash_rate: (Math.random() * 100 + 50) * 1e12, // Simulate TH/s (e.g., 50-150 TH/s)
+                h24_hash_rate: (Math.random() * 100 + 45) * 1e12,
+                // Add other fields as needed from HashRateInfo
+            },
+            currency: selectedCurrency,
+        };
+    } else {
+         console.log(`Hashrate simulation skipped for ${selectedCurrency} (not supported by API endpoint)`);
+    }
+
+
+    // Combine simulated data
+    const combinedData = {
+      balance: simulatedBalance.balance_info,
+      hashrate: simulatedHashrate ? simulatedHashrate.info : null,
+      currency: selectedCurrency,
+      timestamp: new Date().toISOString(),
+    };
+
+    console.log("Simulated Mining Data:", combinedData);
+    return combinedData;
+
+  }, [apiKey, miningUserName, selectedCurrency]); // Dependencies for useCallback
+
+  // Simulate fetching market data (e.g., BTC price, maybe a relevant altcoin)
+  const fetchMarketData = useCallback(async () => {
+     console.log(`Simulating fetchMarketData for currency: ${selectedCurrency}`);
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Simulate market prices
+    const simulatedMarket = {
+      [selectedCurrency]: {
+        usd_price: selectedCurrency === 'bitcoin' ? 60000 + (Math.random() - 0.5) * 5000 : 150 + (Math.random() - 0.5) * 50, // Simulate price fluctuation
+        trend: Math.random() > 0.5 ? 'up' : 'down', // Simulate simple trend
+      },
+      // Add other relevant coins if needed for trading decisions
+      'ethereum': { // Example altcoin
+         usd_price: 3000 + (Math.random() - 0.5) * 300,
+         trend: Math.random() > 0.4 ? 'up' : 'down',
+      },
+      timestamp: new Date().toISOString(),
+    };
+    console.log("Simulated Market Data:", simulatedMarket);
+    return simulatedMarket;
+  }, [selectedCurrency]); // Dependencies for useCallback
+
+  // --- Simulated AI Advisor Logic ---
+  const getAIAdvice = useCallback((currentMiningData, currentMarketData) => {
+    console.log("Simulating AI Advisor Logic...");
+    if (!currentMiningData || !currentMarketData || !currentMiningData.balance) {
+        console.log("Insufficient data for advice.");
+      return "Waiting for data...";
+    }
+
+    const btcPrice = currentMarketData.bitcoin?.usd_price || 60000; // Default if not found
+    const currentBalance = currentMiningData.balance.balance;
+    const btcTrend = currentMarketData.bitcoin?.trend || 'stable'; // Default
+
+    // --- Basic Rules (EXAMPLE ONLY - NOT FINANCIAL ADVICE) ---
+    let recommendation = 'HODL'; // Default action
+    let reason = 'Market conditions stable, accumulation phase.';
+
+    // Rule 1: Sell if price is very high and balance is significant
+    if (btcPrice > 64000 && currentBalance > 0.1 && btcTrend === 'up') {
+      recommendation = 'SELL';
+      reason = `BTC price (${btcPrice.toFixed(0)} USD) is high and trend is up. Consider taking profits on balance (${currentBalance.toFixed(4)} ${selectedCurrency}).`;
+    }
+    // Rule 2: Consider trading if an altcoin looks promising (e.g., ETH is down)
+    else if (btcPrice > 58000 && currentMarketData.ethereum?.trend === 'down' && currentMarketData.ethereum?.usd_price < 2900 && currentBalance > 0.05) {
+       recommendation = 'TRADE';
+       reason = `BTC price is strong (${btcPrice.toFixed(0)} USD), while ETH price (${currentMarketData.ethereum?.usd_price.toFixed(0)} USD) shows potential entry point. Consider trading a portion of ${currentBalance.toFixed(4)} ${selectedCurrency} for ETH.`;
+    }
+     // Rule 3: HODL if price is low or dipping
+    else if (btcPrice < 57000 || btcTrend === 'down') {
+        recommendation = 'HODL';
+        reason = `BTC price (${btcPrice.toFixed(0)} USD) is currently low or trending down. Continue accumulation strategy.`;
+    }
+
+    console.log("AI Recommendation:", recommendation, "Reason:", reason);
+    return { recommendation, reason };
+
+  }, [selectedCurrency]); // Dependency
+
+  // --- Event Handlers ---
+  const handleFetchData = async () => {
+    setIsLoading(true);
+    setMiningData(null);
+    setMarketData(null);
+    setAdvice(null);
+    setError(null); // Clear previous errors before new fetch
+
+    try {
+      // Fetch data sequentially (or in parallel if independent)
+      const fetchedMiningData = await fetchMiningData();
+      const fetchedMarketData = await fetchMarketData();
+
+      if (fetchedMiningData && fetchedMarketData) {
+        setMiningData(fetchedMiningData);
+        setMarketData(fetchedMarketData);
+        // Get advice based on the new data
+        const newAdvice = getAIAdvice(fetchedMiningData, fetchedMarketData);
+        setAdvice(newAdvice);
+      } else if (!fetchedMiningData) {
+          // Error handled within fetchMiningData if credentials missing
+          if (!error) setError("Failed to fetch mining data (simulation).");
+      } else {
+          setError("Failed to fetch market data (simulation).");
+      }
+
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(`An error occurred during simulation: ${err.message}`);
+      setMiningData(null);
+      setMarketData(null);
+      setAdvice(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Helper to format Hashrate ---
+  const formatHashrate = (hashrate) => {
+      if (hashrate === null || typeof hashrate === 'undefined') return 'N/A';
+      const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
+      let i = 0;
+      while (hashrate >= 1000 && i < units.length - 1) {
+          hashrate /= 1000;
+          i++;
+      }
+      return `${hashrate.toFixed(2)} ${units[i]}`;
+  }
+
+  // --- Render Logic ---
+  return (
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-800">F2Pool Mining Advisor (Concept)</h1>
+          <p className="text-gray-600">Simulates fetching mining data and provides conceptual AI advice.</p>
+          <p className="text-sm text-red-600 mt-2">
+            **Important:** This is a simulation. It does not connect to the real F2Pool API, use live market data, or provide financial advice. API keys entered here are not used for real requests.
+          </p>
+        </header>
+
+        {/* --- Input Section --- */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Configuration</CardTitle>
+            <CardDescription>Enter your F2Pool details (used for simulation only).</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-1">F2Pool API Key (Conceptual)</label>
+              <Input
+                id="apiKey"
+                type="password" // Use password type for conceptual masking
+                placeholder="Enter your F2Pool API Secret"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label htmlFor="miningUser" className="block text-sm font-medium text-gray-700 mb-1">Mining User Name</label>
+              <Input
+                id="miningUser"
+                type="text"
+                placeholder="Enter your F2Pool mining user name"
+                value={miningUserName}
+                onChange={(e) => setMiningUserName(e.target.value)}
+                className="w-full"
+              />
+            </div>
+             <div>
+              <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">Select Currency</label>
+              <select
+                id="currency"
+                value={selectedCurrency}
+                onChange={(e) => setSelectedCurrency(e.target.value)}
+                className="block w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                {currencies.map(curr => (
+                  <option key={curr} value={curr}>{curr}</option>
+                ))}
+              </select>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleFetchData} disabled={isLoading || !apiKey || !miningUserName}>
+              {isLoading ? 'Loading...' : 'Fetch Data & Get Advice'}
+            </Button>
+          </CardFooter>
+        </Card>
+
+        {/* --- Error Display --- */}
+        {error && (
+          <Card className="mb-6 bg-red-50 border-red-200">
+            <CardHeader>
+                <CardTitle className="text-red-700">Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-red-600">{error}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- Results Section --- */}
+        {isLoading && <p className="text-center text-gray-600">Loading simulated data...</p>}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Mining Data Card */}
+          {miningData && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Mining Data (Simulated)</CardTitle>
+                <CardDescription>For {miningUserName} - {selectedCurrency.toUpperCase()}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p><strong>Balance:</strong> {miningData.balance?.balance?.toFixed(6) ?? 'N/A'}</p>
+                <p><strong>Immature Balance:</strong> {miningData.balance?.immature_balance?.toFixed(6) ?? 'N/A'}</p>
+                <p><strong>Yesterday's Income:</strong> {miningData.balance?.yesterday_income?.toFixed(6) ?? 'N/A'}</p>
+                <p><strong>Est. Today's Income:</strong> {miningData.balance?.estimated_today_income?.toFixed(6) ?? 'N/A'}</p>
+                 {miningData.hashrate && (
+                    <>
+                        <hr className="my-2"/>
+                        <p><strong>Current Hashrate:</strong> {formatHashrate(miningData.hashrate?.hash_rate)}</p>
+                        <p><strong>24h Avg Hashrate:</strong> {formatHashrate(miningData.hashrate?.h24_hash_rate)}</p>
+                    </>
+                 )}
+                 {!miningData.hashrate && ['bitcoin', 'bitcoin-cash', 'litecoin'].includes(selectedCurrency) && (
+                     <p className="text-gray-500">Hashrate data not available (simulation).</p>
+                 )}
+                 {!['bitcoin', 'bitcoin-cash', 'litecoin'].includes(selectedCurrency) && (
+                     <p className="text-gray-500">Hashrate data not applicable for {selectedCurrency} via this simulated endpoint.</p>
+                 )}
+                <p className="text-xs text-gray-500 pt-2">Timestamp: {new Date(miningData.timestamp).toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Market Data & Advice Card */}
+          {marketData && advice && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Market Data & AI Advice (Simulated)</CardTitle>
+                 <CardDescription>Conceptual recommendation based on rules.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                 {/* Display relevant market data used for advice */}
+                 {marketData[selectedCurrency] && (
+                     <p><strong>{selectedCurrency.toUpperCase()} Price:</strong> ${marketData[selectedCurrency].usd_price?.toFixed(2)} (Trend: {marketData[selectedCurrency].trend})</p>
+                 )}
+                 {marketData.ethereum && selectedCurrency !== 'ethereum' && ( // Show ETH if relevant to advice logic
+                     <p><strong>ETH Price:</strong> ${marketData.ethereum.usd_price?.toFixed(2)} (Trend: {marketData.ethereum.trend})</p>
+                 )}
+
+                 <hr className="my-3"/>
+
+                {/* Display Advice */}
+                {typeof advice === 'string' ? (
+                     <p className="font-semibold">{advice}</p>
+                ) : (
+                    <>
+                        <p className="text-lg font-bold">Recommendation:
+                            <span className={`ml-2 px-2 py-0.5 rounded ${
+                                advice.recommendation === 'SELL' ? 'bg-red-100 text-red-800' :
+                                advice.recommendation === 'TRADE' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-green-100 text-green-800'
+                            }`}>
+                                {advice.recommendation}
+                            </span>
+                        </p>
+                        <p><strong>Reason:</strong> {advice.reason}</p>
+                    </>
+                )}
+                 <p className="text-xs text-gray-500 pt-2">Market Timestamp: {new Date(marketData.timestamp).toLocaleString()}</p>
+              </CardContent>
+               <CardFooter>
+                 <p className="text-xs text-red-600">Disclaimer: This is simulated advice, not financial recommendation.</p>
+               </CardFooter>
+            </Card>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+export default App; // Default export for standard React setup
