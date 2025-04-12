@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MiningData, WorkerInfo, ActivityItem } from '@/types/mining';
 
 export const useMiningData = () => {
@@ -8,6 +8,17 @@ export const useMiningData = () => {
   const [apiKey, setApiKey] = useState<string>('');
   const [miningUserName, setMiningUserName] = useState<string>('');
   const [selectedCurrency, setSelectedCurrency] = useState<string>('bitcoin');
+  
+  // Load credentials from session storage if available
+  useEffect(() => {
+    const storedApiKey = sessionStorage.getItem('f2pool_apikey');
+    const storedUsername = sessionStorage.getItem('f2pool_username');
+    
+    if (storedApiKey && storedUsername) {
+      setApiKey(storedApiKey);
+      setMiningUserName(storedUsername);
+    }
+  }, []);
   
   // Simulated hashrate history data for charts
   const generateHashrateHistory = () => {
@@ -86,54 +97,59 @@ export const useMiningData = () => {
     ];
   };
   
-  // Query to fetch mining data
+  // Query to fetch mining data with direct credentials
   const { 
     data: miningData,
     isLoading: isLoadingMining,
     error: miningError
   } = useQuery({
-    queryKey: ['/api/mining/data', selectedCurrency, miningUserName],
+    queryKey: ['/api/mining/data', selectedCurrency, miningUserName, apiKey],
+    queryFn: () => apiRequest('GET', `/api/mining/data?currency=${selectedCurrency}&miningUserName=${miningUserName}&apiKey=${apiKey}`),
     enabled: !!apiKey && !!miningUserName,
   });
   
-  // Generate hashrate history data
+  // Generate hashrate history data with direct credentials
   const { 
     data: hashrateHistory
   } = useQuery({
-    queryKey: ['/api/mining/hashrate-history', selectedCurrency, miningUserName],
-    enabled: !!miningData,
+    queryKey: ['/api/mining/hashrate-history', selectedCurrency, miningUserName, apiKey],
+    queryFn: () => apiRequest('GET', `/api/mining/hashrate-history?currency=${selectedCurrency}&miningUserName=${miningUserName}&apiKey=${apiKey}`),
+    enabled: !!apiKey && !!miningUserName,
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: generateHashrateHistory()
   });
   
-  // Generate income history data
+  // Generate income history data with direct credentials
   const { 
     data: incomeHistory
   } = useQuery({
-    queryKey: ['/api/mining/income-history', selectedCurrency, miningUserName],
-    enabled: !!miningData,
+    queryKey: ['/api/mining/income-history', selectedCurrency, miningUserName, apiKey],
+    queryFn: () => apiRequest('GET', `/api/mining/income-history?currency=${selectedCurrency}&miningUserName=${miningUserName}&apiKey=${apiKey}`),
+    enabled: !!apiKey && !!miningUserName,
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: generateIncomeHistory()
   });
   
-  // Query to fetch workers data
+  // Query to fetch workers data with direct credentials
   const { 
     data: workersData, 
     isLoading: isLoadingWorkers
   } = useQuery({
-    queryKey: ['/api/mining/workers', selectedCurrency, miningUserName],
-    enabled: !!miningData,
+    queryKey: ['/api/mining/workers', selectedCurrency, miningUserName, apiKey],
+    queryFn: () => apiRequest('GET', `/api/mining/workers?currency=${selectedCurrency}&miningUserName=${miningUserName}&apiKey=${apiKey}`),
+    enabled: !!apiKey && !!miningUserName,
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: generateWorkerStatus()
   });
   
-  // Query to fetch activity data
+  // Query to fetch activity data with direct credentials
   const { 
     data: activityData, 
     isLoading: isLoadingActivity
   } = useQuery({
-    queryKey: ['/api/mining/activity', selectedCurrency, miningUserName],
-    enabled: !!miningData,
+    queryKey: ['/api/mining/activity', selectedCurrency, miningUserName, apiKey],
+    queryFn: () => apiRequest('GET', `/api/mining/activity?currency=${selectedCurrency}&miningUserName=${miningUserName}&apiKey=${apiKey}`),
+    enabled: !!apiKey && !!miningUserName,
     staleTime: 5 * 60 * 1000, // 5 minutes
     placeholderData: generateActivity()
   });
@@ -160,7 +176,20 @@ export const useMiningData = () => {
     setMiningUserName(miningUserName);
     setSelectedCurrency(currency);
     
-    await fetchMiningData({ apiKey, miningUserName, currency });
+    // Save to session storage for temporary convenience
+    sessionStorage.setItem('f2pool_username', miningUserName);
+    sessionStorage.setItem('f2pool_apikey', apiKey);
+    
+    try {
+      await fetchMiningData({ apiKey, miningUserName, currency });
+      return { success: true, message: 'Successfully fetched mining data' };
+    } catch (error) {
+      console.error('Error fetching mining data:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Failed to fetch mining data'
+      };
+    }
   };
   
   // Calculate worker statistics
@@ -183,6 +212,8 @@ export const useMiningData = () => {
     isLoadingActivity,
     error: miningError,
     connectAndFetchData,
-    selectedCurrency
+    selectedCurrency,
+    apiKey,
+    miningUserName
   };
 };

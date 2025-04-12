@@ -9,40 +9,85 @@ interface ApiResponse<T> {
 class F2PoolService {
   private apiBaseUrl = 'https://api.f2pool.com/v2';
   private cache: Map<string, any> = new Map();
-  private defaultApiKey: string | undefined;
-  private defaultMiningUserName: string | undefined;
   
-  constructor() {
-    // Read API key from environment variables
-    this.defaultApiKey = process.env.F2POOL_API_KEY;
-    this.defaultMiningUserName = process.env.F2POOL_USERNAME || 'default_user';
+  // Get API credentials from environment variables
+  getApiCredentials() {
+    return { 
+      apiKey: process.env.F2POOL_API_KEY || '', 
+      username: process.env.F2POOL_USERNAME || '' 
+    };
+  }
+  
+  // Direct test method for simplified connection testing with detailed error handling
+  async testDirectConnection(apiKey: string, miningUserName: string, currency: string): Promise<boolean> {
+    console.log(`Testing direct connection to F2Pool API for ${miningUserName} on ${currency}`);
     
-    if (this.defaultApiKey) {
-      console.log('F2Pool API key loaded from environment variables');
-    } else {
-      console.log('No F2Pool API key found in environment variables');
+    try {
+      // Make a simple API call with minimal data requirements - using hash_rate/info endpoint
+      // This endpoint is specifically mentioned in the docs as supporting bitcoin, bitcoin-cash, litecoin
+      const response = await fetch(`${this.apiBaseUrl}/hash_rate/info`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'F2P-API-SECRET': apiKey
+        },
+        body: JSON.stringify({
+          currency: currency,
+          user_name: miningUserName,  // Changed from mining_user_name to user_name per API docs
+        })
+      });
+      
+      console.log(`F2Pool API response status: ${response.status}`);
+      
+      // Check for non-OK responses
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`F2Pool API Error (${response.status}): ${errorText}`);
+        throw new Error(`F2Pool API Error: ${response.status} ${response.statusText}`);
+      }
+      
+      // Read the response as text first to log it
+      const responseText = await response.text();
+      console.log('F2Pool API response:', responseText);
+      
+      // Then parse it as JSON if it's valid
+      try {
+        const data = JSON.parse(responseText);
+        
+        // Check if the API returned an error code
+        if (data.code && data.code !== 0) {
+          throw new Error(`F2Pool API Error: ${data.msg}`);
+        }
+        
+        // Success!
+        return true;
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        throw new Error(`Invalid JSON response from F2Pool API: ${responseText.substring(0, 100)}...`);
+      }
+    } catch (error) {
+      console.error(`Error testing connection to F2Pool API:`, error);
+      throw error;
     }
   }
   
   // Fetch mining data from F2Pool API
-  async fetchMiningData(apiKey: string | undefined, miningUserName: string, currency: string): Promise<MiningData> {
-    // Use provided API key or fall back to environment variable
-    const resolvedApiKey = apiKey || this.defaultApiKey;
+  async fetchMiningData(apiKey: string | undefined, miningUserName: string | undefined, currency: string): Promise<MiningData> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
     
-    if (!resolvedApiKey) {
-      throw new Error("F2Pool API key is required. Please provide it or set F2POOL_API_KEY in environment variables.");
-    }
-    
-    console.log(`Attempting to fetch F2Pool data for user: ${miningUserName}, currency: ${currency}`);
+    console.log(`Attempting to fetch F2Pool data for user: ${actualUsername}, currency: ${currency}`);
     try {
       // Fetch balance information
-      const balanceInfo = await this.fetchBalanceInfo(resolvedApiKey, miningUserName, currency);
+      const balanceInfo = await this.fetchBalanceInfo(actualApiKey, actualUsername, currency);
       
       // Fetch hashrate information
-      const hashrateInfo = await this.fetchHashrateInfo(resolvedApiKey, miningUserName, currency);
+      const hashrateInfo = await this.fetchHashrateInfo(actualApiKey, actualUsername, currency);
       
       // Fetch workers data
-      const workersData = await this.fetchWorkersData(resolvedApiKey, miningUserName, currency);
+      const workersData = await this.fetchWorkersData(actualApiKey, actualUsername, currency);
       
       // Create mining data object
       const miningData: MiningData = {
@@ -53,23 +98,24 @@ class F2PoolService {
         timestamp: new Date().toISOString()
       };
       
-      // Cache the mining data
-      this.cache.set(`mining_data:${miningUserName}:${currency}`, miningData);
+      // Cache the mining data with API key in the cache key to avoid cross-user data leakage
+      const cacheKey = `mining_data:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
+      this.cache.set(cacheKey, miningData);
       
-      // Generate and cache hashrate history (we'll implement this with real API data later)
-      const hashrateHistory = await this.fetchHashrateHistory(resolvedApiKey, miningUserName, currency);
-      this.cache.set(`hashrate_history:${miningUserName}:${currency}`, hashrateHistory);
+      // Generate and cache hashrate history
+      const hashrateHistory = await this.fetchHashrateHistory(actualApiKey, actualUsername, currency);
+      this.cache.set(`hashrate_history:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`, hashrateHistory);
       
       // Generate and cache income history
-      const incomeHistory = await this.fetchIncomeHistory(resolvedApiKey, miningUserName, currency);
-      this.cache.set(`income_history:${miningUserName}:${currency}`, incomeHistory);
+      const incomeHistory = await this.fetchIncomeHistory(actualApiKey, actualUsername, currency);
+      this.cache.set(`income_history:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`, incomeHistory);
       
       // Cache workers data
-      this.cache.set(`workers:${miningUserName}:${currency}`, workersData);
+      this.cache.set(`workers:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`, workersData);
       
       // Generate and cache activity logs
-      const activityLogs = await this.fetchActivityLogs(resolvedApiKey, miningUserName, currency);
-      this.cache.set(`activity:${miningUserName}:${currency}`, activityLogs);
+      const activityLogs = await this.fetchActivityLogs(actualApiKey, actualUsername, currency);
+      this.cache.set(`activity:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`, activityLogs);
       
       return miningData;
     } catch (error) {
@@ -80,6 +126,8 @@ class F2PoolService {
   
   // Make an authenticated API call to F2Pool
   private async makeApiCall<T>(endpoint: string, apiKey: string, body: Record<string, any>): Promise<T> {
+    console.log(`Making API call to ${endpoint} with body:`, body);
+    
     try {
       const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
         method: 'POST',
@@ -91,11 +139,13 @@ class F2PoolService {
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`F2Pool API Error (${response.status}): ${errorText}`);
         throw new Error(`F2Pool API Error: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
-      console.log(`F2Pool API response for ${endpoint}:`, data); // Added log
+      console.log(`API response from ${endpoint}:`, data);
       
       // Check if the API returned an error code
       if (data.code && data.code !== 0) {
@@ -109,139 +159,135 @@ class F2PoolService {
     }
   }
   
-  // Get cached mining data
-  async getMiningData(miningUserName: string, currency: string, apiKey?: string): Promise<MiningData | null> {
-    const cacheKey = `mining_data:${miningUserName}:${currency}`;
+  // Get cached mining data or generate simulated data as fallback
+  async getMiningData(miningUserName?: string, currency: string = 'bitcoin', apiKey?: string): Promise<MiningData | null> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
+    
+    const cacheKey = `mining_data:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
     
     // If we have cached data, return it
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
     
-    // If we have an API key, attempt to fetch real data
-    if (apiKey || this.defaultApiKey) {
-      try {
-        return await this.fetchMiningData(apiKey, miningUserName, currency);
-      } catch (error) {
-        console.error("Error fetching real data, falling back to simulated data:", error);
-      }
+    try {
+      return await this.fetchMiningData(actualApiKey, actualUsername, currency);
+    } catch (error) {
+      console.error("Error fetching real data, falling back to simulated data:", error);
+      // Generate simulated data as fallback
+      const simulatedData = this.generateSimulatedMiningData(actualUsername || 'unknown', currency as Currency);
+      return simulatedData;
     }
-    
-    // Otherwise, simulate data for testing
-    const simulatedData = this.generateSimulatedMiningData(miningUserName, currency as Currency);
-    this.cache.set(cacheKey, simulatedData);
-    
-    // Also generate and cache related data
-    this.cache.set(`hashrate_history:${miningUserName}:${currency}`, this.generateHashrateHistory(simulatedData.hashrate.h24_hash_rate));
-    this.cache.set(`income_history:${miningUserName}:${currency}`, this.generateIncomeHistory(simulatedData.balance.yesterday_income));
-    this.cache.set(`workers:${miningUserName}:${currency}`, this.generateWorkersData(25));
-    this.cache.set(`activity:${miningUserName}:${currency}`, this.generateActivityLogs());
-    
-    return simulatedData;
   }
   
   // Get hashrate history
-  async getHashrateHistory(miningUserName: string, currency: string, apiKey?: string): Promise<any[]> {
-    const cacheKey = `hashrate_history:${miningUserName}:${currency}`;
+  async getHashrateHistory(miningUserName?: string, currency: string = 'bitcoin', apiKey?: string): Promise<any[]> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
+    
+    const cacheKey = `hashrate_history:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
     
-    if (apiKey || this.defaultApiKey) {
-      try {
-        const history = await this.fetchHashrateHistory(apiKey || this.defaultApiKey, miningUserName, currency);
-        this.cache.set(cacheKey, history);
-        return history;
-      } catch (error) {
-        console.error("Error fetching hashrate history, falling back to simulated data:", error);
-      }
-    }
-    
-    // Get mining data to get current hashrate
-    const miningData = await this.getMiningData(miningUserName, currency);
-    if (miningData) {
-      const history = this.generateHashrateHistory(miningData.hashrate.h24_hash_rate);
+    try {
+      const history = await this.fetchHashrateHistory(actualApiKey, actualUsername, currency);
       this.cache.set(cacheKey, history);
       return history;
+    } catch (error) {
+      console.error("Error fetching hashrate history, falling back to simulated data:", error);
+      // Get mining data to get current hashrate
+      const miningData = await this.getMiningData(actualUsername, currency, actualApiKey);
+      if (miningData) {
+        const history = this.generateHashrateHistory(miningData.hashrate.h24_hash_rate);
+        return history;
+      }
+      return [];
     }
-    
-    return [];
   }
   
   // Get income history
-  async getIncomeHistory(miningUserName: string, currency: string, apiKey?: string): Promise<any[]> {
-    const cacheKey = `income_history:${miningUserName}:${currency}`;
+  async getIncomeHistory(miningUserName?: string, currency: string = 'bitcoin', apiKey?: string): Promise<any[]> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
+    
+    const cacheKey = `income_history:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
     
-    if (apiKey || this.defaultApiKey) {
-      try {
-        const history = await this.fetchIncomeHistory(apiKey || this.defaultApiKey, miningUserName, currency);
-        this.cache.set(cacheKey, history);
-        return history;
-      } catch (error) {
-        console.error("Error fetching income history, falling back to simulated data:", error);
-      }
-    }
-    
-    // Get mining data to get current income
-    const miningData = await this.getMiningData(miningUserName, currency);
-    if (miningData) {
-      const history = this.generateIncomeHistory(miningData.balance.yesterday_income);
+    try {
+      const history = await this.fetchIncomeHistory(actualApiKey, actualUsername, currency);
       this.cache.set(cacheKey, history);
       return history;
+    } catch (error) {
+      console.error("Error fetching income history, falling back to simulated data:", error);
+      
+      // Get mining data to get current income
+      const miningData = await this.getMiningData(actualUsername, currency, actualApiKey);
+      if (miningData) {
+        const history = this.generateIncomeHistory(miningData.balance.yesterday_income);
+        return history;
+      }
+      return [];
     }
-    
-    return [];
   }
   
   // Get workers data
-  async getWorkers(miningUserName: string, currency: string, apiKey?: string): Promise<WorkerInfo[]> {
-    const cacheKey = `workers:${miningUserName}:${currency}`;
+  async getWorkers(miningUserName?: string, currency: string = 'bitcoin', apiKey?: string): Promise<WorkerInfo[]> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
+    
+    const cacheKey = `workers:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
     
-    if (apiKey || this.defaultApiKey) {
-      try {
-        const workers = await this.fetchWorkersData(apiKey || this.defaultApiKey, miningUserName, currency);
-        this.cache.set(cacheKey, workers);
-        return workers;
-      } catch (error) {
-        console.error("Error fetching workers data, falling back to simulated data:", error);
-      }
+    try {
+      const workers = await this.fetchWorkersData(actualApiKey, actualUsername, currency);
+      this.cache.set(cacheKey, workers);
+      return workers;
+    } catch (error) {
+      console.error("Error fetching workers data, falling back to simulated data:", error);
+      const workers = this.generateWorkersData(25);
+      return workers;
     }
-    
-    const workers = this.generateWorkersData(25);
-    this.cache.set(cacheKey, workers);
-    return workers;
   }
   
   // Get activity logs
-  async getActivityLogs(miningUserName: string, currency: string, apiKey?: string): Promise<ActivityItem[]> {
-    const cacheKey = `activity:${miningUserName}:${currency}`;
+  async getActivityLogs(miningUserName?: string, currency: string = 'bitcoin', apiKey?: string): Promise<ActivityItem[]> {
+    // Use environment variables
+    const { apiKey: envApiKey, username: envUsername } = this.getApiCredentials();
+    const actualApiKey = apiKey || envApiKey;
+    const actualUsername = miningUserName || envUsername;
+    
+    const cacheKey = `activity:${actualUsername}:${currency}:${this.hashKey(actualApiKey)}`;
     
     if (this.cache.has(cacheKey)) {
       return this.cache.get(cacheKey);
     }
     
-    if (apiKey || this.defaultApiKey) {
-      try {
-        const activity = await this.fetchActivityLogs(apiKey || this.defaultApiKey, miningUserName, currency);
-        this.cache.set(cacheKey, activity);
-        return activity;
-      } catch (error) {
-        console.error("Error fetching activity logs, falling back to simulated data:", error);
-      }
+    try {
+      const activity = await this.fetchActivityLogs(actualApiKey, actualUsername, currency);
+      this.cache.set(cacheKey, activity);
+      return activity;
+    } catch (error) {
+      console.error("Error fetching activity logs, falling back to simulated data:", error);
+      const activity = this.generateActivityLogs();
+      return activity;
     }
-    
-    const activity = this.generateActivityLogs();
-    this.cache.set(cacheKey, activity);
-    return activity;
   }
   
   // Real API methods
@@ -260,7 +306,7 @@ class F2PoolService {
     try {
       const data = await this.makeApiCall<BalanceApiResponse>('/assets/balance', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
       });
       
       return {
@@ -278,7 +324,7 @@ class F2PoolService {
     }
   }
   
-  private async fetchHashrateInfo(apiKey: string, miningUserName: string, currency: string): Promise<HashRateInfo> {
+  async fetchHashrateInfo(apiKey: string, miningUserName: string, currency: string): Promise<HashRateInfo> {
     interface HashRateApiResponse {
       info: {
         name: string;
@@ -294,7 +340,7 @@ class F2PoolService {
     try {
       const data = await this.makeApiCall<HashRateApiResponse>('/hash_rate/info', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
       });
       
       return {
@@ -307,8 +353,7 @@ class F2PoolService {
       };
     } catch (error) {
       console.error("Error fetching hashrate info:", error);
-      // Return simulated data as fallback
-      return this.generateSimulatedHashrateInfo(miningUserName);
+      throw error;
     }
   }
   
@@ -331,7 +376,7 @@ class F2PoolService {
     try {
       const data = await this.makeApiCall<WorkerApiResponse>('/hash_rate/worker/list', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
       });
       
       return data.workers.map(worker => ({
@@ -368,7 +413,7 @@ class F2PoolService {
     try {
       const data = await this.makeApiCall<HashrateHistoryResponse>('/hash_rate/history', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
         interval: 3600, // 1 hour intervals (in seconds)
         duration: dayInSeconds, // Last 24 hours
       });
@@ -380,7 +425,7 @@ class F2PoolService {
     } catch (error) {
       console.error("Error fetching hashrate history:", error);
       // Get mining data to get current hashrate
-      const miningData = await this.getMiningData(miningUserName, currency);
+      const miningData = await this.getMiningData(miningUserName, currency, apiKey);
       if (miningData) {
         // Return simulated data as fallback
         return this.generateHashrateHistory(miningData.hashrate.h24_hash_rate);
@@ -411,7 +456,7 @@ class F2PoolService {
     try {
       const data = await this.makeApiCall<TransactionsResponse>('/assets/transactions/list', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
         type: 'revenue', // Only get revenue transactions
         start_time: weekAgo,
         end_time: now,
@@ -439,7 +484,7 @@ class F2PoolService {
       console.error("Error fetching income history:", error);
       
       // Get mining data to get current income
-      const miningData = await this.getMiningData(miningUserName, currency);
+      const miningData = await this.getMiningData(miningUserName, currency, apiKey);
       if (miningData) {
         // Return simulated data as fallback
         return this.generateIncomeHistory(miningData.balance.yesterday_income);
@@ -467,7 +512,7 @@ class F2PoolService {
       // Fetch transactions for activity
       const data = await this.makeApiCall<TransactionsResponse>('/assets/transactions/list', apiKey, {
         currency: currency,
-        mining_user_name: miningUserName,
+        user_name: miningUserName, // Changed from mining_user_name to user_name per API docs
         type: 'all', // Get all transaction types
         start_time: dayAgo,
         end_time: now,
@@ -617,6 +662,17 @@ class F2PoolService {
         timestamp: now - 43200 // 12h ago
       }
     ];
+  }
+
+  // Helper to create a simple hash of the API key for cache keys
+  private hashKey(key: string): string {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      const char = key.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(16);
   }
 }
 

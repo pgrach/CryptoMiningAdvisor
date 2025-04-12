@@ -2,9 +2,21 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Load environment variables from .env file
-dotenv.config();
+// Get current file and directory paths in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env file with absolute path
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+// Debug: Log the environment variables
+console.log('Environment variables loaded:', {
+  F2POOL_API_KEY: process.env.F2POOL_API_KEY ? '****' + process.env.F2POOL_API_KEY.slice(-4) : 'undefined',
+  F2POOL_USERNAME: process.env.F2POOL_USERNAME || 'undefined',
+});
 
 const app = express();
 app.use(express.json());

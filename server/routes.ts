@@ -1,348 +1,296 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
 import { f2poolService } from "./services/f2pool";
 import { marketService } from "./services/market";
 import { advisorService } from "./services/advisor";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Mining account management endpoints
-  app.post('/api/mining/accounts', async (req, res) => {
+  // API connection testing - now using env vars if no credentials provided
+  app.post('/api/mining/test-connection', async (req, res) => {
     try {
-      const { username, apiToken, currency = 'bitcoin' } = req.body;
+      const { apiKey, miningUserName, currency = 'bitcoin' } = req.body;
       
-      if (!username) {
-        return res.status(400).json({ 
-          message: 'F2Pool mining username is required' 
+      // Try to make a minimal API call to verify credentials
+      try {
+        // The simplest call is to fetch hashrate info using provided or env credentials
+        await f2poolService.fetchHashrateInfo(apiKey, miningUserName, currency);
+        
+        // If we get here, the connection was successful
+        res.json({
+          success: true,
+          message: 'Connection successful. API credentials are valid.',
+        });
+      } catch (apiError: any) {
+        console.error('F2Pool API test failed:', apiError);
+
+        // Try to provide a more meaningful error message
+        let errorMessage = 'Failed to connect to F2Pool API. Please check your credentials.';
+        
+        if (apiError.message) {
+          if (apiError.message.includes('401') || apiError.message.includes('403')) {
+            errorMessage = 'Authentication failed. Your API key appears to be invalid.';
+          } else if (apiError.message.includes('404')) {
+            errorMessage = 'Mining username not found. Please check your F2Pool username.';
+          } else if (apiError.message.includes('Too Many Requests') || apiError.message.includes('429')) {
+            errorMessage = 'Too many requests to F2Pool API. Please try again later.';
+          }
+        }
+        
+        res.status(400).json({
+          success: false,
+          message: errorMessage
+        });
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'An unknown error occurred'
+      });
+    }
+  });
+
+  // New API endpoint to get connection status using environment variables
+  app.get('/api/mining/env-connection-status', async (req, res) => {
+    try {
+      const apiKey = process.env.F2POOL_API_KEY;
+      const miningUserName = process.env.F2POOL_USERNAME;
+      const currency = 'bitcoin';
+      
+      if (!apiKey || !miningUserName) {
+        return res.json({
+          success: false,
+          message: 'API credentials not configured in environment variables',
+          configured: false
         });
       }
       
-      // Check if account already exists
-      const existingAccount = await storage.getMiningAccountByUsername(username);
-      if (existingAccount) {
-        return res.status(409).json({
-          message: 'A mining account with this username already exists',
-          accountId: existingAccount.id
+      try {
+        // Test connection with environment variables
+        await f2poolService.fetchHashrateInfo(apiKey, miningUserName, currency);
+        
+        res.json({
+          success: true,
+          message: 'Environment connection successful',
+          configured: true,
+          username: miningUserName,
+          currency: currency
+        });
+      } catch (apiError) {
+        console.error('F2Pool API env connection test failed:', apiError);
+        
+        res.json({
+          success: false,
+          message: 'Environment credentials are invalid',
+          configured: true,
+          error: apiError instanceof Error ? apiError.message : 'Unknown error'
+        });
+      }
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error checking environment connection',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // New endpoint specifically for testing direct connection to F2Pool API
+  app.post('/api/mining/test-direct-connection', async (req, res) => {
+    try {
+      console.log('Testing direct connection to F2Pool API...');
+      const { currency = 'bitcoin' } = req.body;
+      
+      // Get credentials from environment variables
+      const apiKey = process.env.F2POOL_API_KEY;
+      const username = process.env.F2POOL_USERNAME;
+      
+      if (!apiKey || !username) {
+        console.error('Missing API credentials in environment variables');
+        return res.json({
+          success: false,
+          message: 'API credentials not properly configured in environment variables'
         });
       }
       
-      // Create new mining account
-      const newAccount = await storage.createMiningAccount({
-        username,
-        apiKey: apiToken,
-        currency
-      });
+      console.log(`Making test request with username: ${username}, currency: ${currency}`);
       
-      // Remove apiKey from response for security
-      const { apiKey, ...accountWithoutToken } = newAccount;
-      
-      res.status(201).json({
-        message: 'Mining account created successfully',
-        account: accountWithoutToken
-      });
-    } catch (error) {
-      console.error('Error creating mining account:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to create mining account' 
-      });
-    }
-  });
-  
-  app.get('/api/mining/accounts', async (req, res) => {
-    try {
-      // Get all mining accounts (without API keys)
-      const accounts = await storage.listMiningAccounts();
-      
-      // Remove API keys from response for security
-      const safeAccounts = accounts.map(({ apiKey, ...rest }) => rest);
-      
-      res.json(safeAccounts);
-    } catch (error) {
-      console.error('Error listing mining accounts:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to list mining accounts' 
-      });
-    }
-  });
-  
-  app.get('/api/mining/accounts/:id', async (req, res) => {
-    try {
-      const account = await storage.getMiningAccount(req.params.id);
-      
-      if (!account) {
-        return res.status(404).json({ message: 'Mining account not found' });
+      try {
+        // Make a direct API call to F2Pool with detailed logging
+        await f2poolService.testDirectConnection(apiKey, username, currency);
+        
+        // If we get here, the connection was successful
+        res.json({
+          success: true,
+          message: 'Successfully connected to F2Pool API',
+          username: username
+        });
+      } catch (apiError: any) {
+        // Log the full error for debugging
+        console.error('F2Pool API direct test failed:', apiError);
+        
+        let errorMessage = 'Failed to connect to F2Pool API. Please check your credentials.';
+        
+        if (apiError.message) {
+          if (apiError.message.includes('401') || apiError.message.includes('403')) {
+            errorMessage = 'Authentication failed. Your API key appears to be invalid.';
+          } else if (apiError.message.includes('404')) {
+            errorMessage = 'Mining username not found. Please check your F2Pool username.';
+          } else if (apiError.message.includes('Too Many Requests') || apiError.message.includes('429')) {
+            errorMessage = 'Too many requests to F2Pool API. Please try again later.';
+          } else {
+            errorMessage = `API Error: ${apiError.message}`;
+          }
+        }
+        
+        res.status(200).json({
+          success: false,
+          message: errorMessage
+        });
       }
-      
-      // Remove API key from response for security
-      const { apiKey, ...accountWithoutToken } = account;
-      
-      res.json(accountWithoutToken);
-    } catch (error) {
-      console.error('Error getting mining account:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to get mining account' 
+    } catch (error: any) {
+      console.error('Error handling direct connection test:', error);
+      res.status(200).json({
+        success: false,
+        message: `Server error: ${error.message || 'Unknown error'}`
       });
     }
   });
-  
-  app.put('/api/mining/accounts/:id', async (req, res) => {
-    try {
-      const { currency } = req.body;
-      const updates: Record<string, any> = {};
-      
-      if (currency) updates.currency = currency;
-      
-      const updatedAccount = await storage.updateMiningAccount(req.params.id, updates);
-      
-      if (!updatedAccount) {
-        return res.status(404).json({ message: 'Mining account not found' });
-      }
-      
-      // Remove API key from response for security
-      const { apiKey, ...accountWithoutToken } = updatedAccount;
-      
-      res.json({
-        message: 'Mining account updated successfully',
-        account: accountWithoutToken
-      });
-    } catch (error) {
-      console.error('Error updating mining account:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to update mining account' 
-      });
-    }
-  });
-  
-  app.delete('/api/mining/accounts/:id', async (req, res) => {
-    try {
-      const success = await storage.deleteMiningAccount(req.params.id);
-      
-      if (!success) {
-        return res.status(404).json({ message: 'Mining account not found' });
-      }
-      
-      res.json({ message: 'Mining account deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting mining account:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to delete mining account' 
-      });
-    }
-  });
-  
-  // API token management
-  app.post('/api/mining/accounts/:id/token', async (req, res) => {
-    try {
-      const { apiToken } = req.body;
-      
-      if (!apiToken) {
-        return res.status(400).json({ message: 'API token is required' });
-      }
-      
-      const account = await storage.getMiningAccount(req.params.id);
-      
-      if (!account) {
-        return res.status(404).json({ message: 'Mining account not found' });
-      }
-      
-      // Update the API token
-      await storage.updateMiningAccount(req.params.id, { apiKey: apiToken });
-      
-      res.json({ message: 'API token updated successfully' });
-    } catch (error) {
-      console.error('Error updating API token:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to update API token' 
-      });
-    }
-  });
-  
-  // Mining data endpoints
+
+  // Mining data direct fetch endpoint
   app.post('/api/mining/fetch', async (req, res) => {
     try {
-      const { apiKey, miningUserName, currency } = req.body;
+      const { apiKey, miningUserName, currency = 'bitcoin' } = req.body;
       
-      if (!miningUserName || !currency) {
-        return res.status(400).json({ 
-          message: 'Mining username and currency are required' 
-        });
-      }
+      // Fetch mining data from F2Pool (will use env vars if no credentials provided)
+      const miningData = await f2poolService.fetchMiningData(apiKey, miningUserName, currency);
       
-      // Use provided API key or try to get it from storage
-      const token = apiKey || await storage.getApiToken(miningUserName);
-      
-      if (!token) {
-        return res.status(400).json({ 
-          message: 'API token is required. Either provide it or set up a mining account first.' 
-        });
-      }
-      
-      // Fetch mining data from F2Pool
-      const miningData = await f2poolService.fetchMiningData(token, miningUserName, currency);
-      
-      // If apiKey was provided but not stored, store it for future use
-      if (apiKey && !(await storage.getMiningAccountByUsername(miningUserName))) {
-        await storage.setApiToken(miningUserName, apiKey);
-      }
-      
-      res.json({ success: true, message: 'Mining data fetched successfully' });
+      res.json({ 
+        success: true, 
+        message: 'Mining data fetched successfully',
+        data: miningData
+      });
     } catch (error) {
       console.error('Error fetching mining data:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to fetch mining data' 
       });
     }
   });
   
-  // Endpoint to get mining data
+  // Endpoint to get mining data using env credentials if not provided
   app.get('/api/mining/data', async (req, res) => {
     try {
-      const { currency, miningUserName } = req.query;
+      const { currency = 'bitcoin', miningUserName, apiKey } = req.query;
       
-      if (!currency || !miningUserName) {
-        return res.status(400).json({ 
-          message: 'Currency and mining username are required' 
-        });
-      }
-      
-      // Try to get API token from storage
-      const apiToken = await storage.getApiToken(miningUserName as string);
-      
-      // Get mining data, using API token if available
+      // Get mining data with the provided credentials or env vars
       const miningData = await f2poolService.getMiningData(
-        miningUserName as string, 
+        miningUserName as string | undefined, 
         currency as string,
-        apiToken
+        apiKey as string | undefined
       );
       
       if (!miningData) {
-        return res.status(404).json({ message: 'Mining data not found' });
+        return res.status(404).json({ 
+          success: false,
+          message: 'Mining data not found' 
+        });
       }
       
       res.json(miningData);
     } catch (error) {
       console.error('Error getting mining data:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get mining data' 
       });
     }
   });
   
-  // Endpoint to get hashrate history
+  // Endpoint to get hashrate history using env credentials if not provided
   app.get('/api/mining/hashrate-history', async (req, res) => {
     try {
-      const { currency, miningUserName } = req.query;
+      const { currency = 'bitcoin', miningUserName, apiKey } = req.query;
       
-      if (!currency || !miningUserName) {
-        return res.status(400).json({ 
-          message: 'Currency and mining username are required' 
-        });
-      }
-      
-      // Try to get API token from storage
-      const apiToken = await storage.getApiToken(miningUserName as string);
-      
-      // Get hashrate history, using API token if available
+      // Get hashrate history with provided credentials or env vars
       const history = await f2poolService.getHashrateHistory(
-        miningUserName as string, 
+        miningUserName as string | undefined, 
         currency as string,
-        apiToken
+        apiKey as string | undefined
       );
       
       res.json(history);
     } catch (error) {
       console.error('Error getting hashrate history:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get hashrate history' 
       });
     }
   });
   
-  // Endpoint to get income history
+  // Endpoint to get income history using env credentials if not provided
   app.get('/api/mining/income-history', async (req, res) => {
     try {
-      const { currency, miningUserName } = req.query;
+      const { currency = 'bitcoin', miningUserName, apiKey } = req.query;
       
-      if (!currency || !miningUserName) {
-        return res.status(400).json({ 
-          message: 'Currency and mining username are required' 
-        });
-      }
-      
-      // Try to get API token from storage
-      const apiToken = await storage.getApiToken(miningUserName as string);
-      
-      // Get income history, using API token if available
+      // Get income history with provided credentials or env vars
       const history = await f2poolService.getIncomeHistory(
-        miningUserName as string, 
+        miningUserName as string | undefined, 
         currency as string,
-        apiToken
+        apiKey as string | undefined
       );
       
       res.json(history);
     } catch (error) {
       console.error('Error getting income history:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get income history' 
       });
     }
   });
   
-  // Endpoint to get workers data
+  // Endpoint to get workers data using env credentials if not provided
   app.get('/api/mining/workers', async (req, res) => {
     try {
-      const { currency, miningUserName } = req.query;
+      const { currency = 'bitcoin', miningUserName, apiKey } = req.query;
       
-      if (!currency || !miningUserName) {
-        return res.status(400).json({ 
-          message: 'Currency and mining username are required' 
-        });
-      }
-      
-      // Try to get API token from storage
-      const apiToken = await storage.getApiToken(miningUserName as string);
-      
-      // Get workers data, using API token if available
+      // Get workers data with provided credentials or env vars
       const workers = await f2poolService.getWorkers(
-        miningUserName as string, 
+        miningUserName as string | undefined, 
         currency as string,
-        apiToken
+        apiKey as string | undefined
       );
       
       res.json(workers);
     } catch (error) {
       console.error('Error getting workers data:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get workers data' 
       });
     }
   });
   
-  // Endpoint to get activity logs
+  // Endpoint to get activity logs using env credentials if not provided
   app.get('/api/mining/activity', async (req, res) => {
     try {
-      const { currency, miningUserName } = req.query;
+      const { currency = 'bitcoin', miningUserName, apiKey } = req.query;
       
-      if (!currency || !miningUserName) {
-        return res.status(400).json({ 
-          message: 'Currency and mining username are required' 
-        });
-      }
-      
-      // Try to get API token from storage
-      const apiToken = await storage.getApiToken(miningUserName as string);
-      
-      // Get activity logs, using API token if available
+      // Get activity logs with provided credentials or env vars
       const activity = await f2poolService.getActivityLogs(
-        miningUserName as string, 
+        miningUserName as string | undefined, 
         currency as string,
-        apiToken
+        apiKey as string | undefined
       );
       
       res.json(activity);
     } catch (error) {
       console.error('Error getting activity logs:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get activity logs' 
       });
     }
@@ -360,6 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error getting market data:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get market data' 
       });
     }
@@ -371,7 +320,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { currency, balance, price } = req.query;
       
       if (!currency) {
-        return res.status(400).json({ message: 'Currency is required' });
+        return res.status(400).json({ 
+          success: false,
+          message: 'Currency is required' 
+        });
       }
       
       // Get AI advisor recommendation
@@ -385,6 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error getting advisor recommendation:', error);
       res.status(500).json({ 
+        success: false,
         message: error instanceof Error ? error.message : 'Failed to get advisor recommendation' 
       });
     }
